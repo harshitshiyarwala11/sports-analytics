@@ -1,0 +1,25 @@
+# Downloaded data (keep raw downloads out of git)
+data/
+raw/
+downloads/
+
+# Cache folders (FastF1 HTTP cache, request caches, etc.)
+cache/
+.cache/
+.fastf1_cache/
+fastf1_cache/
+*.sqlite
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
