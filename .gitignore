@@ -10,6 +10,9 @@ cache/
 fastf1_cache/
 *.sqlite
 
+# Generated charts and CSVs (re-create by running the scripts)
+output/
+
 # Python
 __pycache__/
 *.py[cod]
