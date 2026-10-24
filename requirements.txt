@@ -2,3 +2,4 @@ pandas
 matplotlib
 fastf1
 requests
+openpyxl

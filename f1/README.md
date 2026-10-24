@@ -19,6 +19,18 @@ python f1/practice_race_pace.py --year 2026 --location Austin --sessions "Practi
 Writes a CSV and a heatmap per session to `f1/output/` and prints the table.
 Use `--refresh` to re-download data for a session that was still in progress.
 
+### `practice_laps_to_excel.py` — every lap to Excel
+
+Builds a workbook with two sheets: **All Laps** (every lap with sector 1/2/3 and
+lap times, average speed for each, tyre and lap type) and **Averages** (each
+driver's average per session over representative laps). Speeds and averages are
+Excel formulas. Sector lengths are estimated from speed telemetry and scaled to
+the official lap length you pass in.
+
+```bash
+python f1/practice_laps_to_excel.py --year 2026 --location Austin --lap-km 5.513
+```
+
 ## FastF1 quick start
 
 ```python
