@@ -6,8 +6,8 @@ into cricket/data/t20s/. Then:
     python cricket/batting_stats.py --player "DJ Mitchell" --team "New Zealand" \
         --data cricket/data/t20s --venue Wellington
 
---venue matches any part of the venue or city name ("Wellington" covers both
-"Sky Stadium" and its old name "Westpac Stadium", which Cricsheet records separately).
+--venue matches any part of the venue or city name and takes several names, e.g.
+--venue "Sky Stadium" "Westpac Stadium" for one ground that was renamed.
 """
 
 import argparse
@@ -21,6 +21,14 @@ PHASES = [("Powerplay (1-6)", 0, 5), ("Middle (7-15)", 6, 14), ("Death (16-20)",
 NOT_DISMISSALS = {"retired hurt", "retired not out"}
 
 
+def venue_matches(info, venues):
+    """True if the match venue or city contains any of the given names."""
+    if not venues:
+        return True
+    ground = f'{info.get("venue", "")} {info.get("city", "")}'.lower()
+    return any(v.lower() in ground for v in venues)
+
+
 def load_balls(data_dirs, player, team=None, venue=None):
     """Every ball the player faced, plus one row per innings they batted in."""
     balls, innings = [], []
@@ -30,8 +38,7 @@ def load_balls(data_dirs, player, team=None, venue=None):
             info = match["info"]
             if info.get("gender") != "male":
                 continue
-            ground = f'{info.get("venue", "")} {info.get("city", "")}'
-            if venue and venue.lower() not in ground.lower():
+            if not venue_matches(info, venue):
                 continue
             squads = info["players"]
             if not any(player in p and (team is None or t == team) for t, p in squads.items()):
@@ -59,6 +66,8 @@ def load_balls(data_dirs, player, team=None, venue=None):
                         extras = ball.get("extras", {})
                         balls.append({
                             "match_id": match_id,
+                            "date": date,
+                            "opponent": opponent,
                             "over": over["over"],
                             "runs": ball["runs"]["batter"],
                             "legal": "wides" not in extras,  # no-balls count as faced
@@ -84,8 +93,7 @@ def matches_played(data_dirs, player, team=None, venue=None):
             info = json.loads(Path(path).read_text())["info"]
             if info.get("gender") != "male":
                 continue
-            ground = f'{info.get("venue", "")} {info.get("city", "")}'
-            if venue and venue.lower() not in ground.lower():
+            if not venue_matches(info, venue):
                 continue
             if any(player in p and (team is None or t == team) for t, p in info["players"].items()):
                 count += 1
@@ -171,7 +179,7 @@ def main():
     parser.add_argument("--player", required=True, help='Cricsheet name, e.g. "DJ Mitchell"')
     parser.add_argument("--team", help='only innings for this team, e.g. "New Zealand"')
     parser.add_argument("--data", nargs="+", required=True, help="folders of Cricsheet JSON")
-    parser.add_argument("--venue", help="part of the venue or city name")
+    parser.add_argument("--venue", nargs="+", help="part of the venue or city name(s)")
     parser.add_argument("--out", type=Path, help="write the summary and innings to this .xlsx")
     args = parser.parse_args()
 
@@ -188,10 +196,11 @@ def main():
     print("\nBy phase\n" + phases.to_string(index=False))
     print("\nBy innings\n" + by_innings.to_string(index=False))
     if args.out:
-        with pd.ExcelWriter(args.out) as xl:
-            summary.to_frame().to_excel(xl, sheet_name="Summary")
-            phases.to_excel(xl, sheet_name="By phase", index=False)
-            by_innings.to_excel(xl, sheet_name="By innings", index=False)
+        from batting_excel import write_workbook
+
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        where = ", ".join(args.venue) if args.venue else "all grounds"
+        write_workbook(args.out, f"{args.player} batting — {where}", balls, innings, matches)
         print(f"\nSaved {args.out}")
 
 

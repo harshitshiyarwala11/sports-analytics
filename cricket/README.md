@@ -30,11 +30,17 @@ innings. Names use Cricsheet's format (initials + surname, e.g. `DJ Mitchell`).
 ```bash
 # T20Is (unzip t20s_json.zip into cricket/data/t20s first)
 python cricket/batting_stats.py --player "DJ Mitchell" --team "New Zealand" \
-    --data cricket/data/t20s --venue Wellington --out cricket/output/mitchell.xlsx
+    --data cricket/data/t20s --venue "Sky Stadium" "Westpac Stadium" \
+    --out cricket/output/mitchell.xlsx
 ```
 
-`--venue` matches part of the venue or city, so renamed grounds (Westpac Stadium →
-Sky Stadium) are both picked up.
+`--venue` matches part of the venue or city name and takes several names, so a
+renamed ground (Westpac Stadium → Sky Stadium) can be covered in one run; use a
+city (`--venue Wellington`) for every ground there.
+
+`--out` writes an Excel workbook (`batting_excel.py`): Summary and By Phase sheets
+built from formulas over the Innings and Balls sheets, so every number can be traced
+back to the ball-by-ball data.
 
 ## Layout
 
