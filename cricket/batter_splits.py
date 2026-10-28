@@ -122,12 +122,12 @@ def write_workbook(path, player, balls, innings, matches, fmt, splits, bowlers):
     phase_of = lambda o: next((n for n, lo, hi in phases if lo <= o <= hi), "Other")  # noqa: E731
     _table(ball_ws, ["Match ID", "Date", "Opponent", "Venue", "City", "In host country",
                      "Over", "Phase", "Bowler", "Runs off bat", "Legal ball", "Out on this ball",
-                     "Wicket to bowler", "First ball from this bowler"],
-           [11, 11, 14, 28, 14, 9, 6, 16, 16, 8, 7, 12, 8, 10])
+                     "Wicket to bowler", "First ball from this bowler", "Out (1 = yes)"],
+           [11, 11, 14, 28, 14, 9, 6, 16, 16, 8, 7, 12, 8, 10, 8])
     for b in balls.itertuples():
         ball_ws.append([b.match_id, b.date, b.opponent, b.venue, b.city, b.in_host, b.over,
-                        phase_of(b.over), b.bowler, b.runs, b.legal, b.out_kind,
-                        b.bowler_wicket, b.first_vs_bowler])
+                        phase_of(b.over), b.bowler, b.runs, b.legal, b.out_kind or None,
+                        b.bowler_wicket, b.first_vs_bowler, int(bool(b.out_kind))])
     nb = len(balls) + 1
     B = lambda c: f"Balls!${c}$2:${c}${nb}"  # noqa: E731
 
@@ -255,7 +255,7 @@ def write_workbook(path, player, balls, innings, matches, fmt, splits, bowlers):
                 f"=COUNTIFS({crit},{B('J')},6)",
                 f'=IF(D{r}=0,"",COUNTIFS({crit},{B("K")},"Yes",{B("J")},0)/D{r})',
                 f'=IF(D{r}=0,"",(F{r}+G{r})/D{r})',
-                f'=COUNTIFS({crit},{B("L")},"?*")',
+                f"=SUMIFS({B('O')},{crit})",
             ])
             phase_ws.cell(row=r, column=5).number_format = "0.0"
             phase_ws.cell(row=r, column=8).number_format = "0.0%"
