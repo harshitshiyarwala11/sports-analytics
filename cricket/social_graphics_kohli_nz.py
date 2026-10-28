@@ -209,9 +209,10 @@ def reel_slides(s):
 
 
 # Carousel slides: 1080x1350 (Instagram portrait 4:5).
-def table(fig, top, headers, rows, col_x, highlight_col=None, row_h=0.062, size=30):
+def table(fig, top, headers, rows, col_x, highlight_col=None, row_h=0.062, size=30,
+          header_size=24):
     for x, h in zip(col_x, headers):
-        text(fig, x, top, h, 24, MUTED, "bold", ha="left" if x == col_x[0] else "center")
+        text(fig, x, top, h, header_size, MUTED, "bold", ha="left" if x == col_x[0] else "center")
     for i, row in enumerate(rows):
         y = top - (i + 1) * row_h
         if i % 2 == 0:
@@ -256,11 +257,14 @@ def carousel_slides(s):
     kicker(fig, 0.92, "Kohli vs the Kiwi bowlers")
     order = sorted(b.items(), key=lambda kv: kv[1]["balls"], reverse=True)
     rows = [(name, str(v["innings"]), f"{v['runs']} ({v['balls']})", f"{v['sr']:.1f}",
-             str(v["outs"]), f"{v['dot']:.0f}%") for name, v in order]
-    table(fig, 0.80, ["Bowler", "Inns", "Runs (balls)", "SR", "Outs", "Dot %"], rows,
-          [0.07, 0.42, 0.565, 0.70, 0.80, 0.905], row_h=0.085, size=30)
-    text(fig, 0.5, 0.17, "Outs = wickets credited to the bowler (run outs excluded)", 22, MUTED)
-    text(fig, 0.5, 0.135, "Duffy (5 balls) and Clarke (52 balls): small samples", 22, MUTED)
+             str(v["outs"]), f"{v['dot']:.0f}%", f"{100 * v['bdry'] / v['balls']:.0f}%")
+            for name, v in order]
+    table(fig, 0.80, ["Bowler", "Inns", "Runs (balls)", "SR", "Outs", "Dot %", "Bdry %"],
+          rows, [0.07, 0.385, 0.505, 0.625, 0.715, 0.805, 0.905], row_h=0.085, size=26,
+          header_size=20)
+    text(fig, 0.5, 0.19, "Bdry % = (4s + 6s) ÷ balls faced", 22, MUTED)
+    text(fig, 0.5, 0.16, "Outs = wickets credited to the bowler (run outs excluded)", 22, MUTED)
+    text(fig, 0.5, 0.13, "Duffy (5 balls) and Clarke (52 balls): small samples", 22, MUTED)
     footer(fig, s["data_to"], y=0.07)
     save(fig, "carousel_03_bowlers.png")
 
