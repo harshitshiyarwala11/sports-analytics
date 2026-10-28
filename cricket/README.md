@@ -42,6 +42,25 @@ city (`--venue Wellington`) for every ground there.
 built from formulas over the Innings and Balls sheets, so every number can be traced
 back to the ball-by-ball data.
 
+### `batter_splits.py` — one batter across splits, plus head-to-heads
+
+Compares a batter in a host country, against one opponent (all venues) and over
+their whole career, side by side, plus stats against named bowlers (runs, balls,
+strike rate, dismissals, dot %, how out). Everything in the workbook is a formula
+over the ball-by-ball "Balls" sheet.
+
+```bash
+# ODIs (unzip odis_json.zip into cricket/data/odis first)
+python cricket/batter_splits.py --player "V Kohli" --team India --data cricket/data/odis \
+    --host-label "New Zealand" --host-cities Auckland Hamilton "Mount Maunganui" Napier \
+        Wellington Christchurch Dunedin Nelson Queenstown \
+    --opponent "New Zealand" \
+    --bowlers "MJ Henry" "MJ Santner" "LH Ferguson" \
+    --out cricket/output/kohli_odi_nz.xlsx
+```
+
+Cricsheet doesn't store a match's country, so list the host country's cities.
+
 ## Layout
 
 - `data/` — downloaded match data (git-ignored)
