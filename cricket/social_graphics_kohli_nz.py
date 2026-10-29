@@ -69,6 +69,7 @@ def bowler_stats(balls, bowler):
         "sr": 100 * runs / len(legal), "outs": outs,
         "avg": runs / outs if outs else None, "dot": 100 * (legal.runs == 0).mean(),
         "bdry": int(b.runs.isin([4, 6]).sum()),
+        "bdry_pct": 100 * b.runs.isin([4, 6]).sum() / len(legal),
     }
 
 
@@ -124,6 +125,13 @@ def save(fig, name):
     plt.close(fig)
 
 
+def bdry_line(fig, bowler, car, career_sr=False):
+    """Boundary % against one bowler, with Kohli's career figure for reference."""
+    text(fig, 0.5, 0.31, f"Boundary %: {bowler['bdry_pct']:.1f}%", 40, INK, "bold")
+    ref = f"SR {car['sr']:.1f}  ·  " if career_sr else ""
+    text(fig, 0.5, 0.262, f"Kohli's career: {ref}{car['bdry']:.1f}% boundaries", 30, MUTED)
+
+
 # Reel slides keep content between y=0.20 and y=0.85 (clear of app UI).
 def reel_slides(s):
     b, vs, home, car = s["bowlers"], s["vs_nz"], s["nz_home"], s["career"]
@@ -144,6 +152,7 @@ def reel_slides(s):
     stat_block(fig, 0.27, 0.49, f"{vs['avg']:.1f}", "average", 84)
     stat_block(fig, 0.73, 0.49, f"{vs['100s']}", "hundreds", 84)
     text(fig, 0.5, 0.33, f"{vs['matches']} ODIs  ·  SR {vs['sr']:.1f}  ·  HS {vs['hs']}", 34, INK_2)
+    text(fig, 0.5, 0.28, f"Boundary %: {vs['bdry']:.1f}%  ·  career {car['bdry']:.1f}%", 34, INK_2)
     footer(fig, s["data_to"])
     save(fig, "reel_02_vs_nz.png")
 
@@ -153,7 +162,9 @@ def reel_slides(s):
     stat_block(fig, 0.27, 0.60, f"{home['avg']:.1f}", "average", 84)
     stat_block(fig, 0.73, 0.60, f"{home['sr']:.1f}", "strike rate", 84)
     stat_block(fig, 0.5, 0.43, f"{home['dot']:.1f}%", "of balls are dots")
-    text(fig, 0.5, 0.30, f"{home['matches']} ODIs  ·  {home['runs']} runs  ·  HS {home['hs']}",
+    text(fig, 0.5, 0.31, f"{home['matches']} ODIs  ·  {home['runs']} runs  ·  HS {home['hs']}",
+         34, INK_2)
+    text(fig, 0.5, 0.26, f"Boundary %: {home['bdry']:.1f}%  ·  career {car['bdry']:.1f}%",
          34, INK_2)
     footer(fig, s["data_to"])
     save(fig, "reel_03_in_nz.png")
@@ -166,6 +177,7 @@ def reel_slides(s):
     text(fig, 0.5, 0.40, f"{f['runs']} runs off {f['balls']} balls\n"
          f"{f['bdry']} boundaries  ·  out {f['outs']} time{'s' if f['outs'] != 1 else ''}",
          38, INK_2, linespacing=1.5)
+    bdry_line(fig, f, car)
     footer(fig, s["data_to"])
     save(fig, "reel_04_ferguson.png")
 
@@ -174,12 +186,14 @@ def reel_slides(s):
     kicker(fig, 0.80, "Henry & Jamieson")
     text(fig, 0.5, 0.735, "They keep him quiet", 56, INK, "bold")
     for x, name, d in ((0.27, "Matt Henry", h), (0.73, "Kyle Jamieson", j)):
-        panel(fig, x - 0.21, 0.37, 0.42, 0.31)
+        panel(fig, x - 0.21, 0.345, 0.42, 0.335)
         text(fig, x, 0.635, name, 34, INK, "bold")
         text(fig, x, 0.555, f"{d['dot']:.0f}%", 110, ACCENT, "bold")
         text(fig, x, 0.495, "dot balls", 28, INK_2)
-        text(fig, x, 0.42, f"{d['runs']} off {d['balls']}  ·  out {d['outs']}", 28, INK_2)
-    text(fig, 0.5, 0.30, f"Kohli's career dot-ball rate: {car['dot']:.1f}%", 32, MUTED)
+        text(fig, x, 0.425, f"{d['runs']} off {d['balls']}  ·  out {d['outs']}", 28, INK_2)
+        text(fig, x, 0.38, f"Boundary %: {d['bdry_pct']:.1f}%", 28, INK_2)
+    text(fig, 0.5, 0.285, f"Kohli's career: {car['dot']:.1f}% dots  ·  {car['bdry']:.1f}% boundaries",
+         30, MUTED)
     footer(fig, s["data_to"])
     save(fig, "reel_05_henry_jamieson.png")
 
@@ -190,7 +204,7 @@ def reel_slides(s):
     text(fig, 0.5, 0.40, f"{sant['runs']} runs off {sant['balls']} balls\n"
          f"only {sant['bdry']} boundaries  ·  out {sant['outs']} times", 38, INK_2,
          linespacing=1.5)
-    text(fig, 0.5, 0.30, f"Kohli's career ODI strike rate: {car['sr']:.1f}", 32, MUTED)
+    bdry_line(fig, sant, car, career_sr=True)
     footer(fig, s["data_to"])
     save(fig, "reel_06_santner.png")
 
@@ -199,11 +213,12 @@ def reel_slides(s):
     kicker(fig, 0.82, "The new threats")
     text(fig, 0.5, 0.715, "WHO GETS\nKOHLI NEXT?", 90, INK, "bold", linespacing=1.1)
     for x, name, v in ((0.27, "Jacob Duffy", d), (0.73, "Kristian Clarke", c)):
-        panel(fig, x - 0.21, 0.40, 0.42, 0.20)
+        panel(fig, x - 0.21, 0.37, 0.42, 0.23)
         text(fig, x, 0.565, name, 34, INK, "bold")
         text(fig, x, 0.495, f"{v['outs']} out", 72, ACCENT, "bold")
         text(fig, x, 0.435, f"in {v['balls']} balls", 30, INK_2)
-    text(fig, 0.5, 0.32, "Comment below", 48, ACCENT, "bold")
+        text(fig, x, 0.395, f"Boundary %: {v['bdry_pct']:.1f}%", 28, INK_2)
+    text(fig, 0.5, 0.30, "Comment below", 48, ACCENT, "bold")
     footer(fig, s["data_to"])
     save(fig, "reel_07_question.png")
 
