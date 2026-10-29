@@ -73,8 +73,8 @@ def bowler_stats(balls, bowler):
     }
 
 
-def compute():
-    balls, innings, matches, _ = load([HERE / "data" / "odis"], "V Kohli", "India", NZ_CITIES)
+def compute(player="V Kohli", short="Kohli"):
+    balls, innings, matches, _ = load([HERE / "data" / "odis"], player, "India", NZ_CITIES)
     s = {
         "nz_home": split_stats(balls[balls.in_host == "Yes"], innings[innings.in_host == "Yes"]),
         "vs_nz": split_stats(balls[balls.opponent == "New Zealand"],
@@ -85,7 +85,8 @@ def compute():
     s["vs_nz"]["matches"] = int((matches.opponent == "New Zealand").sum())
     s["career"]["matches"] = len(matches)
     s["bowlers"] = {name: bowler_stats(balls, code) for code, name in BOWLERS.items()}
-    s["data_to"] = pd.Timestamp(matches.date.max()).strftime("%-d %b %Y")
+    s["short"] = s["career"]["who"] = short
+    s["data_to"] = f"{short}'s ODIs up to {pd.Timestamp(matches.date.max()):%-d %b %Y}"
     return s
 
 
@@ -105,7 +106,7 @@ def kicker(fig, y, s):
 
 
 def footer(fig, data_to, y=0.205):
-    text(fig, 0.5, y, f"Data: Cricsheet ball-by-ball  ·  Kohli's ODIs up to {data_to}", 20, MUTED)
+    text(fig, 0.5, y, f"Data: Cricsheet ball-by-ball  ·  {data_to}", 20, MUTED)
 
 
 def panel(fig, x, y, w, h):
@@ -126,10 +127,10 @@ def save(fig, name):
 
 
 def bdry_line(fig, bowler, car, career_sr=False):
-    """Boundary % against one bowler, with Kohli's career figure for reference."""
+    """Boundary % against one bowler, with the batter's career figure for reference."""
     text(fig, 0.5, 0.31, f"Boundary %: {bowler['bdry_pct']:.1f}%", 40, INK, "bold")
     ref = f"SR {car['sr']:.1f}  ·  " if career_sr else ""
-    text(fig, 0.5, 0.262, f"Kohli's career: {ref}{car['bdry']:.1f}% boundaries", 30, MUTED)
+    text(fig, 0.5, 0.262, f"{car['who']}'s career: {ref}{car['bdry']:.1f}% boundaries", 30, MUTED)
 
 
 # Reel slides keep content between y=0.20 and y=0.85 (clear of app UI).
@@ -243,14 +244,14 @@ def carousel_slides(s):
 
     fig = canvas(1350)
     kicker(fig, 0.78, "ODI numbers")
-    text(fig, 0.5, 0.60, "KOHLI\nvs NEW ZEALAND", 78, INK, "bold", linespacing=1.15)
+    text(fig, 0.5, 0.60, f"{s['short'].upper()}\nvs NEW ZEALAND", 78, INK, "bold", linespacing=1.15)
     text(fig, 0.5, 0.40, "In NZ  ·  vs NZ  ·  vs 6 Kiwi bowlers", 36, INK_2)
     text(fig, 0.5, 0.28, "Swipe →", 40, ACCENT, "bold")
     footer(fig, s["data_to"], y=0.08)
     save(fig, "carousel_01_cover.png")
 
     fig = canvas(1350)
-    kicker(fig, 0.92, "Kohli in ODIs: the splits")
+    kicker(fig, 0.92, f"{s['short']} in ODIs: the splits")
     rows = [
         ("Matches", home["matches"], vs["matches"], car["matches"]),
         ("Runs", f"{home['runs']:,}", f"{vs['runs']:,}", f"{car['runs']:,}"),
@@ -269,7 +270,7 @@ def carousel_slides(s):
     save(fig, "carousel_02_splits.png")
 
     fig = canvas(1350)
-    kicker(fig, 0.92, "Kohli vs the Kiwi bowlers")
+    kicker(fig, 0.92, f"{s['short']} vs the Kiwi bowlers")
     order = sorted(b.items(), key=lambda kv: kv[1]["balls"], reverse=True)
     rows = [(name, str(v["innings"]), f"{v['runs']} ({v['balls']})", f"{v['sr']:.1f}",
              str(v["outs"]), f"{v['dot']:.0f}%", f"{100 * v['bdry'] / v['balls']:.0f}%")
@@ -279,12 +280,14 @@ def carousel_slides(s):
           header_size=20)
     text(fig, 0.5, 0.19, "Bdry % = (4s + 6s) ÷ balls faced", 22, MUTED)
     text(fig, 0.5, 0.16, "Outs = wickets credited to the bowler (run outs excluded)", 22, MUTED)
-    text(fig, 0.5, 0.13, "Duffy (5 balls) and Clarke (52 balls): small samples", 22, MUTED)
+    small = [f"{n.split()[-1]} ({v['balls']} balls)" for n, v in order if v["innings"] <= 3]
+    if small:
+        text(fig, 0.5, 0.13, "Small samples: " + ", ".join(small), 22, MUTED)
     footer(fig, s["data_to"], y=0.07)
     save(fig, "carousel_03_bowlers.png")
 
     fig = canvas(1350)
-    kicker(fig, 0.92, "Kohli's strike rate by bowler")
+    kicker(fig, 0.92, f"{s['short']}'s strike rate by bowler")
     ax = fig.add_axes([0.33, 0.17, 0.58, 0.66])
     ax.set_facecolor(BG)
     items = sorted(b.items(), key=lambda kv: kv[1]["sr"])
