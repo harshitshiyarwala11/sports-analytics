@@ -3,7 +3,8 @@
 Uses straights_vs_corners.py to split the lap into full-throttle straights and
 corner sections (from the session's fastest lap), times every driver's fastest
 valid lap through each section, and colours the circuit by the section winner.
-The circuit outline comes from the reference lap's car position data (OpenF1).
+The circuit outline comes from a hand-traced map in circuits.py when one exists,
+otherwise from the reference lap's car position data (OpenF1).
 
     python f1/track_dominance.py --year 2026 --location "Mexico City" --lap-km 4.304 \
         --sections "Main straight" "Turns 1-3" "Back straight" "Turns 4-6" \
@@ -27,6 +28,7 @@ import requests  # noqa: E402
 from matplotlib.collections import LineCollection  # noqa: E402
 
 import straights_vs_corners as sc  # noqa: E402
+from circuits import CIRCUITS, label_positions, traced_outline  # noqa: E402
 from practice_race_pace import API, CACHE, HERE, fetch  # noqa: E402
 
 # Dark-mode categorical palette, fixed order (validated for colour-vision deficiency).
@@ -87,7 +89,7 @@ def outline(session_key, ref):
     return frac, xy
 
 
-def draw(path, title, subtitle, table, zones, frac, xy, names):
+def draw(path, title, subtitle, table, zones, frac, xy, names, label_at=None):
     winners = table.idxmin()
     order = list(dict.fromkeys(w[0] for w in winners))  # first-win order, fixed colours
     if len(order) > len(PALETTE):
@@ -114,14 +116,21 @@ def draw(path, title, subtitle, table, zones, frac, xy, names):
     ax.add_collection(LineCollection(segs, colors=cols, linewidths=12, capstyle="round",
                                      zorder=2))
 
-    # Label each section at its midpoint, pushed outward from the track centre.
+    # Label each section beside its midpoint: offset along the track's normal, on the
+    # side facing away from the circuit's centre.
     centre = xy.mean(axis=0)
     span = np.ptp(xy, axis=0).max()
     for k, z in zones.reset_index(drop=True).iterrows():
         f_mid = (z.start + z.end) / 2
-        p = np.array([np.interp(f_mid, frac, xy[:, 0]), np.interp(f_mid, frac, xy[:, 1])])
-        out = (p - centre) / (np.linalg.norm(p - centre) + 1e-9)
-        q = p + out * span * 0.075
+        i = int(np.argmin(np.abs(frac - f_mid)))
+        p = xy[i]
+        tang = xy[min(i + 3, len(xy) - 1)] - xy[max(i - 3, 0)]
+        normal = np.array([-tang[1], tang[0]]) / (np.linalg.norm(tang) + 1e-9)
+        if np.dot(normal, p - centre) < 0:
+            normal = -normal
+        q = p + normal * span * 0.06
+        if label_at and k in label_at:
+            q = np.array(label_at[k])
         code = winners.iloc[k][1]
         ax.text(q[0], q[1], code, ha="center", va="center", fontsize=19, color=INK,
                 fontweight="bold", zorder=4,
@@ -177,16 +186,22 @@ def main():
         if name not in args.sessions:
             continue
         table, zones, ref = section_times(s["session_key"], args.lap_km)
-        frac, xy = outline(s["session_key"], ref)
+        names, label_at = args.sections, None
+        if args.location in CIRCUITS:  # traced map: no position data needed
+            frac, xy = traced_outline(args.location, zones.start.to_numpy(), zones.end.iloc[-1])
+            names = names or CIRCUITS[args.location]["sections"]
+            label_at = label_positions(args.location)
+        else:
+            frac, xy = outline(s["session_key"], ref)
         label = short.get(name, name)
         path = out / f"{args.year}_{args.location.replace(' ', '_').lower()}_{label.lower()}_track_dominance.png"
         draw(path, f"TRACK DOMINANCE · {label}",
              f"Fastest driver in each section{' · ' + args.event if args.event else ''}",
-             table, zones, frac, xy, args.sections)
+             table, zones, frac, xy, names, label_at)
         print("Saved", path)
         for k, col in enumerate(table.columns):
             s_ = table[col].sort_values()
-            print(f"  {args.sections[k] if k < len(args.sections) else k}: {s_.index[0][0]} "
+            print(f"  {names[k] if k < len(names) else k}: {s_.index[0][0]} "
                   f"{s_.iloc[0]:.3f} (+{s_.iloc[1] - s_.iloc[0]:.3f} {s_.index[1][0]})")
 
 
