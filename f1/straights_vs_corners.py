@@ -63,7 +63,8 @@ def fastest_laps(session_key):
         subset=["lap_duration", "date_start"] + SECTORS)
     ok = ok[[(d, n) not in bad for d, n in zip(ok.driver_number, ok.lap_number)]]
     best = ok.sort_values("lap_duration").drop_duplicates("driver_number")
-    return best.merge(drivers[["driver_number", "full_name", "team_name"]], on="driver_number")
+    return best.merge(drivers[["driver_number", "full_name", "name_acronym", "team_name"]],
+                      on="driver_number")
 
 
 def trace(session_key, lap):
