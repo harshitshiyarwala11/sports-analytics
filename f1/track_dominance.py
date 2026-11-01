@@ -54,9 +54,9 @@ def fetch_location(session_key, driver_number, start, end):
     return data
 
 
-def section_times(session_key, lap_km):
+def section_times(session_key, lap_km, window=None):
     """Per-driver time through each section (main straight parts merged)."""
-    best = sc.fastest_laps(session_key)
+    best = sc.fastest_laps(session_key, window)
     ref = best.iloc[0]
     zones = sc.zones(sc.trace(session_key, ref), lap_km * 1000)
     times = {}
@@ -177,6 +177,8 @@ def main():
     parser.add_argument("--sessions", nargs="+", default=["Practice 1", "Practice 2"])
     parser.add_argument("--sections", nargs="*", default=[])
     parser.add_argument("--event", default="", help='title text, e.g. "Mexico City GP 2026"')
+    parser.add_argument("--quali-phase", type=int, choices=[1, 2, 3],
+                        help="with --sessions Qualifying: only laps from Q1, Q2 or Q3")
     args = parser.parse_args()
     out = HERE / "output"
     out.mkdir(exist_ok=True)
@@ -185,7 +187,11 @@ def main():
         name = s["session_name"]
         if name not in args.sessions:
             continue
-        table, zones, ref = section_times(s["session_key"], args.lap_km)
+        window = None
+        if args.quali_phase and name == "Qualifying":
+            window = sc.quali_window(s["session_key"], args.quali_phase)
+            short[name] = f"Q{args.quali_phase}"
+        table, zones, ref = section_times(s["session_key"], args.lap_km, window)
         names, label_at = args.sections, None
         if args.location in CIRCUITS:  # traced map: no position data needed
             frac, xy = traced_outline(args.location, zones.start.to_numpy(), zones.end.iloc[-1])

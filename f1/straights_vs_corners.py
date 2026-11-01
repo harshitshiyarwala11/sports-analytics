@@ -54,14 +54,32 @@ def deleted_laps(session_key, laps):
     return bad
 
 
-def fastest_laps(session_key):
-    """Each driver's fastest valid lap, with name and team."""
+def quali_window(session_key, phase):
+    """(start, chequered flag) of qualifying part Q1/Q2/Q3, from race control."""
+    rc = pd.DataFrame(fetch("race_control", session_key=session_key))
+    rc = rc[rc.qualifying_phase == phase]
+    started = rc[rc.message == "SESSION STARTED"].date
+    finished = rc[rc.message.isin(["SESSION FINISHED", "CHEQUERED FLAG"])].date
+    if started.empty or finished.empty:
+        raise SystemExit(f"Q{phase} start/finish not found in race control.")
+    return (pd.Timestamp(started.min()), pd.Timestamp(finished.max()))
+
+
+def fastest_laps(session_key, window=None):
+    """Each driver's fastest valid lap, with name and team.
+
+    window: optional (start, end) timestamps; only laps started inside it count
+    (for a qualifying part, laps started before the chequered flag).
+    """
     laps = pd.DataFrame(fetch("laps", session_key=session_key))
     drivers = pd.DataFrame(fetch("drivers", session_key=session_key))
     bad = deleted_laps(session_key, laps)
     ok = laps[~laps.is_pit_out_lap.fillna(False).astype(bool)].dropna(
         subset=["lap_duration", "date_start"] + SECTORS)
     ok = ok[[(d, n) not in bad for d, n in zip(ok.driver_number, ok.lap_number)]]
+    if window:
+        started = pd.to_datetime(ok.date_start, format="ISO8601")
+        ok = ok[(started >= window[0]) & (started <= window[1])]
     best = ok.sort_values("lap_duration").drop_duplicates("driver_number")
     return best.merge(drivers[["driver_number", "full_name", "name_acronym", "team_name"]],
                       on="driver_number")
@@ -131,8 +149,8 @@ def measure(tr, z):
     }
 
 
-def analyse(session_key, lap_km):
-    best = fastest_laps(session_key)
+def analyse(session_key, lap_km, window=None):
+    best = fastest_laps(session_key, window)
     lap_m = lap_km * 1000
     ref_lap = best.iloc[0]
     z = zones(trace(session_key, ref_lap), lap_m)
@@ -159,12 +177,16 @@ def main():
     parser.add_argument("--location", required=True)
     parser.add_argument("--lap-km", type=float, required=True)
     parser.add_argument("--sessions", nargs="+", default=["Practice 1", "Practice 2"])
+    parser.add_argument("--quali-phase", type=int, choices=[1, 2, 3],
+                        help="with --sessions Qualifying: only laps from Q1, Q2 or Q3")
     args = parser.parse_args()
     pd.set_option("display.width", 220)
     for s in fetch("sessions", year=args.year, location=args.location):
         if s["session_name"] not in args.sessions:
             continue
-        df, z, ref = analyse(s["session_key"], args.lap_km)
+        window = (quali_window(s["session_key"], args.quali_phase)
+                  if args.quali_phase and s["session_name"] == "Qualifying" else None)
+        df, z, ref = analyse(s["session_key"], args.lap_km, window)
         st, co = z[z.straight], z[~z.straight]
         print(f"\n=== {s['session_name']}  (reference: {ref.full_name.title()}, "
               f"{len(st)} straights {st.length_m.sum():.0f} m, "
