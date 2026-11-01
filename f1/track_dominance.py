@@ -109,7 +109,8 @@ def draw(path, title, subtitle, table, zones, frac, xy, names, label_at=None, co
     fig = plt.figure(figsize=(10.8, 13.5), dpi=100)
     fig.patch.set_facecolor(BG)
     fig.text(0.5, 0.955, title, ha="center", fontsize=40, color=INK, fontweight="bold")
-    fig.text(0.5, 0.92, subtitle, ha="center", fontsize=21, color=INK_2)
+    fig.text(0.5, 0.92, subtitle, ha="center", color=INK_2,
+             fontsize=21 if len(subtitle) <= 64 else 21 * 64 / len(subtitle))
 
     ax = fig.add_axes([0.06, 0.39, 0.88, 0.50])
     ax.set_facecolor(BG)
@@ -220,7 +221,7 @@ def main():
             codes = table.index.get_level_values("Code")
             dropped = table.index[codes.isin(excluded)].get_level_values("Driver").tolist()
             variants.append((table[~codes.isin(excluded)],
-                             "".join(f"_without_{c.lower()}" for c in excluded),
+                             "_without_" + "_".join(c.lower() for c in excluded),
                              f" · without {', '.join(dropped)}"))
         colour = colours_for([v[0] for v in variants])
         stem = f"{args.year}_{args.location.replace(' ', '_').lower()}_{label.lower()}"
