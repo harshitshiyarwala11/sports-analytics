@@ -89,12 +89,22 @@ def outline(session_key, ref):
     return frac, xy
 
 
-def draw(path, title, subtitle, table, zones, frac, xy, names, label_at=None):
-    winners = table.idxmin()
-    order = list(dict.fromkeys(w[0] for w in winners))  # first-win order, fixed colours
+def colours_for(tables):
+    """One fixed colour per section winner across several maps, in lap-time order.
+
+    Rows of each table are in lap-time order, so a driver keeps the same colour on
+    every map drawn with the result.
+    """
+    winners = {w[0] for t in tables for w in t.idxmin()}
+    order = [d for d in dict.fromkeys(i[0] for t in tables for i in t.index) if d in winners]
     if len(order) > len(PALETTE):
         raise SystemExit("More section winners than palette colours.")
-    colour = {d: PALETTE[i] for i, d in enumerate(order)}
+    return {d: PALETTE[i] for i, d in enumerate(order)}
+
+
+def draw(path, title, subtitle, table, zones, frac, xy, names, label_at=None, colour=None):
+    winners = table.idxmin()
+    colour = colour or colours_for([table])
 
     fig = plt.figure(figsize=(10.8, 13.5), dpi=100)
     fig.patch.set_facecolor(BG)
@@ -179,6 +189,8 @@ def main():
     parser.add_argument("--event", default="", help='title text, e.g. "Mexico City GP 2026"')
     parser.add_argument("--quali-phase", type=int, choices=[1, 2, 3],
                         help="with --sessions Qualifying: only laps from Q1, Q2 or Q3")
+    parser.add_argument("--exclude", nargs="+", default=[],
+                        help="driver codes to leave out of the section ranking, e.g. LIN")
     args = parser.parse_args()
     out = HERE / "output"
     out.mkdir(exist_ok=True)
@@ -200,11 +212,26 @@ def main():
         else:
             frac, xy = outline(s["session_key"], ref)
         label = short.get(name, name)
-        path = out / f"{args.year}_{args.location.replace(' ', '_').lower()}_{label.lower()}_track_dominance.png"
-        draw(path, f"TRACK DOMINANCE · {label}",
-             f"Fastest driver in each section{' · ' + args.event if args.event else ''}",
-             table, zones, frac, xy, names, label_at)
-        print("Saved", path)
+        # With --exclude, draw the full map and the map without those drivers, sharing
+        # one colour per driver so the two can be compared side by side.
+        excluded = [c.upper() for c in args.exclude]
+        variants = [(table, "", "")]
+        if excluded:
+            codes = table.index.get_level_values("Code")
+            dropped = table.index[codes.isin(excluded)].get_level_values("Driver").tolist()
+            variants.append((table[~codes.isin(excluded)],
+                             "".join(f"_without_{c.lower()}" for c in excluded),
+                             f" · without {', '.join(dropped)}"))
+        colour = colours_for([v[0] for v in variants])
+        stem = f"{args.year}_{args.location.replace(' ', '_').lower()}_{label.lower()}"
+        for tbl, suffix, note in variants:
+            path = out / f"{stem}_track_dominance{suffix}.png"
+            subtitle = "Fastest driver in each section" + (
+                note or (f" · {args.event}" if args.event else ""))
+            draw(path, f"TRACK DOMINANCE · {label}", subtitle,
+                 tbl, zones, frac, xy, names, label_at, colour)
+            print("Saved", path)
+        table = variants[-1][0]
         for k, col in enumerate(table.columns):
             s_ = table[col].sort_values()
             print(f"  {names[k] if k < len(names) else k}: {s_.index[0][0]} "
