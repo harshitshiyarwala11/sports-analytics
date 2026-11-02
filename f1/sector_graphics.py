@@ -22,7 +22,7 @@ from matplotlib.collections import LineCollection  # noqa: E402
 import straights_vs_corners as sc  # noqa: E402
 from circuits import CIRCUITS  # noqa: E402
 from practice_race_pace import HERE, SECTORS, fetch  # noqa: E402
-from track_dominance import BG, INK, INK_2, MUTED, PALETTE, TRACK, clean_laps  # noqa: E402
+from track_dominance import BG, INK, INK_2, MUTED, TRACK, clean_laps, colour_map  # noqa: E402
 
 plt.rcParams["font.family"] = "Liberation Sans"
 
@@ -71,9 +71,8 @@ def sector_outline(name):
 
 
 def colours_for(tables):
-    """One colour per sector winner across all graphics, in order of first appearance."""
-    order = list(dict.fromkeys(t[col].idxmin()[0] for t in tables for col in t.columns))
-    return {d: PALETTE[i] for i, d in enumerate(order)}
+    """One colour per sector winner across all graphics (fixed per driver)."""
+    return colour_map(tables, {t[col].idxmin()[0] for t in tables for col in t.columns})
 
 
 def draw(path, title, subtitle, table, parts, colour, note, label_at=None):

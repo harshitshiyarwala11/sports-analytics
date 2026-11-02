@@ -34,6 +34,19 @@ from practice_race_pace import API, CACHE, HERE, fetch  # noqa: E402
 # Dark-mode categorical palette, fixed order (validated for colour-vision deficiency).
 PALETTE = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9",
            "#e66767"]
+# Fixed colours for regular front-runners, so a driver looks the same on every graphic.
+# Chosen on the dark background for the widest separation between the two reds and
+# the two greens; every section also carries a driver label, so colour is never the
+# only cue. Other drivers get FALLBACK colours in order.
+DRIVER_COLOURS = {
+    "HAM": "#E8302F",  # scarlet
+    "LEC": "#B5175F",  # crimson
+    "VER": "#2F7FDB",  # blue
+    "NOR": "#F28C1A",  # orange
+    "ANT": "#3DAF2C",  # green
+    "RUS": "#12B5A5",  # turquoise green
+}
+FALLBACK = ["#9085e9", "#c98500", "#8a97ad", "#d55181"]
 BG, INK, INK_2, MUTED, TRACK = "#0B1426", "#FFFFFF", "#C9D3E3", "#8A97AD", "#2A3854"
 plt.rcParams["font.family"] = "Liberation Sans"
 
@@ -190,10 +203,20 @@ def colours_for(tables, higher_is_better=False):
     """
     winners = {w[0] for t in tables
                for w in (t.idxmax() if higher_is_better else t.idxmin())}
+    return colour_map(tables, winners)
+
+
+def colour_map(tables, winners):
+    """Driver name -> colour: DRIVER_COLOURS by code, else FALLBACK in lap-time order."""
+    code_of = {i[0]: i[1] for t in tables for i in t.index}
     order = [d for d in dict.fromkeys(i[0] for t in tables for i in t.index) if d in winners]
-    if len(order) > len(PALETTE):
-        raise SystemExit("More section winners than palette colours.")
-    return {d: PALETTE[i] for i, d in enumerate(order)}
+    spare = iter(FALLBACK)
+    colours = {}
+    for d in order:
+        colours[d] = DRIVER_COLOURS.get(code_of[d]) or next(spare, None)
+        if colours[d] is None:
+            raise SystemExit("More section winners than colours.")
+    return colours
 
 
 def draw(path, title, subtitle, table, zones, frac, xy, names, label_at=None, colour=None,
