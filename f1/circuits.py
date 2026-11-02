@@ -35,6 +35,9 @@ CIRCUITS = {
                      "Straight to T7", "Esses (T7-11)", "Straight to T12", "Stadium (T12-17)"],
         # Fixed label spots (image px) where the automatic placement is cramped.
         "labels": {4: (262, 168), 7: (32, 66)},
+        # Timing sector lines (image px): end of sector 1, end of sector 2.
+        "sector_marks": [(307, 151), (129, 74)],
+        "sector_labels": {1: (222, 152), 2: (36, 70)},  # fixed spots (image px)
     },
 }
 
