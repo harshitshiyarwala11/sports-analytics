@@ -84,7 +84,9 @@ def section_times(session_key, lap_km, window=None):
         last = table.columns[-1]
         table[table.columns[0]] = table[table.columns[0]] + table[last]
         table = table.drop(columns=last)
+        main = zones.length_m.iloc[0] + zones.length_m.iloc[-1]
         zones = zones.iloc[:-1].copy()
+        zones.loc[zones.index[0], "length_m"] = main
     return table, zones, ref
 
 
@@ -313,6 +315,8 @@ def main():
                         help="with --sessions Qualifying: only laps from Q1, Q2 or Q3")
     parser.add_argument("--exclude", nargs="+", default=[],
                         help="driver codes to leave out of the section ranking, e.g. LIN")
+    parser.add_argument("--speed", action="store_true",
+                        help="show average speed (km/h) through each section instead of time")
     parser.add_argument("--average", action="store_true",
                         help="rank sections by average speed over all clean laps "
                              "instead of each driver's fastest lap")
@@ -339,6 +343,12 @@ def main():
                      "Data: OpenF1 car telemetry  ·  ■ = start/finish line"]
         else:
             table, zones, ref = section_times(s["session_key"], args.lap_km, window)
+            if args.speed:  # same ranking, shown as km/h: section length / time
+                table = table.rdiv(zones.length_m.to_numpy(), axis=1) * 3.6
+                notes = ["Each driver's fastest valid lap  ·  Avg speed = section length ÷ time",
+                         "Straights = full-throttle zones of the session's fastest lap  ·  "
+                         "Margin = gap to 2nd",
+                         "Data: OpenF1 car telemetry  ·  ■ = start/finish line"]
         names, label_at = args.sections, None
         if args.location in CIRCUITS:  # traced map: no position data needed
             frac, xy = traced_outline(args.location, zones.start.to_numpy(), zones.end.iloc[-1])
@@ -365,21 +375,22 @@ def main():
             variants.append((table[~codes.isin(excluded)],
                              "_without_" + "_".join(c.lower() for c in excluded),
                              f" · without {', '.join(dropped)}"))
-        colour = colours_for([v[0] for v in variants], args.average)
+        speed = args.average or args.speed
+        colour = colours_for([v[0] for v in variants], speed)
         stem = f"{args.year}_{args.location.replace(' ', '_').lower()}_{label.lower()}"
         for tbl, suffix, note in variants:
-            path = out / f"{stem}_track_dominance{'_avg_speed' if args.average else ''}{suffix}.png"
+            path = out / f"{stem}_track_dominance{'_avg_speed' if args.average else '_speed' if args.speed else ''}{suffix}.png"
             subtitle = ("Highest average speed in each section" if args.average
                         else "Fastest driver in each section") + (
                 note or (f" · {args.event}" if args.event else ""))
             draw(path, f"TRACK DOMINANCE · {label.upper()}", subtitle,
-                 tbl, zones, frac, xy, names, label_at, colour, speed=args.average, notes=notes)
+                 tbl, zones, frac, xy, names, label_at, colour, speed=speed, notes=notes)
             print("Saved", path)
         table = variants[-1][0]
         if counts:
             print("  laps averaged:", {k[1]: v for k, v in counts.items()})
         for k, col in enumerate(table.columns):
-            s_ = table[col].sort_values(ascending=not args.average)
+            s_ = table[col].sort_values(ascending=not speed)
             print(f"  {names[k] if k < len(names) else k}: {s_.index[0][0]} "
                   f"{s_.iloc[0]:.3f} ({abs(s_.iloc[1] - s_.iloc[0]):.3f} ahead of "
                   f"{s_.index[1][0]})")
