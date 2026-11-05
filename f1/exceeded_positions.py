@@ -162,19 +162,20 @@ def write_workbook(path, df, year, n_races):
     wb.save(path)
 
 
-OUTCOMES = [("Gained", "#3DAF2C"), ("Same", "#8A97AD"), ("Lost", "#E53935"),
-            ("Did not finish", "#3A4660")]
+OUTCOMES = [("Gained", "#3DAF2C"), ("Same", "#8A97AD"), ("Lost", "#E53935")]
 GRIDLINE = "#2A3854"
 plt.rcParams["font.family"] = "Liberation Sans"
 
 
 def outcomes(df):
-    """Per driver: long stints by result at the finish vs position at the stint start."""
+    """Per driver: long stints by result at the finish vs position at the stint start.
+
+    Only races the driver finished count; retirements are left out.
+    """
     fin = pd.to_numeric(df.finish, errors="coerce")
-    change = df.pos_stint_start - fin
-    df = df.assign(outcome=np.select([fin.isna(), change > 0, change == 0],
-                                     ["Did not finish", "Gained", "Same"], "Lost"),
-                   change=change)
+    df = df[fin.notna()].assign(change=df.pos_stint_start - fin)
+    df = df.assign(outcome=np.select([df.change > 0, df.change == 0], ["Gained", "Same"],
+                                     "Lost"))
     t = df.pivot_table(index="driver", columns="outcome", values="race", aggfunc="count",
                        fill_value=0)
     for name, _ in OUTCOMES:
@@ -201,7 +202,7 @@ def draw_outcomes(path, title, subtitle, t, highlight, notes, top_n=15):
         for i, (v, l) in enumerate(zip(vals, left)):
             if v:
                 ax.text(l + v / 2, i, f"{int(v)}", ha="center", va="center", fontsize=13,
-                        color=INK if name in ("Did not finish", "Lost") else "#0B1426",
+                        color=INK if name == "Lost" else "#0B1426",
                         fontweight="bold")
         left += vals
     for i, (d, r) in enumerate(t.iterrows()):
@@ -222,7 +223,7 @@ def draw_outcomes(path, title, subtitle, t, highlight, notes, top_n=15):
     for sp in ax.spines.values():
         sp.set_visible(False)
     ax.set_xlabel("long stints (past the pit window)", color=MUTED, fontsize=14)
-    ax.legend(loc="upper center", bbox_to_anchor=(0.62, -0.09), frameon=False, ncol=4,
+    ax.legend(loc="upper center", bbox_to_anchor=(0.62, -0.09), frameon=False, ncol=3,
               fontsize=14, labelcolor=INK)
     for i, n in enumerate(notes):
         fig.text(0.07, 0.17 - 0.026 * i, n, fontsize=13.5, color=MUTED)
@@ -253,12 +254,12 @@ def main():
     write_workbook(path, df, args.year, len(sessions))
     print(f"{len(df)} exceeded stints -> {path}")
     t = outcomes(df)
-    notes = [f"{len(df)} stints that ran past the pit window, {args.year} season "
-             f"({len(sessions)} races).",
+    finished = int(pd.to_numeric(df.finish, errors="coerce").notna().sum())
+    notes = [f"{finished} stints that ran past the pit window in races the driver finished, "
+             f"{args.year} season ({len(sessions)} races); retirements left out.",
              "Gained / same / lost = finishing position vs position at the start of the "
              "long stint.",
-             "Avg = average places gained (finishers only). Data: OpenF1 positions & "
-             "results."]
+             "Avg = average places gained. Data: OpenF1 positions & results."]
     png = out / f"{args.year}_long_stints_finish.png"
     draw_outcomes(png, "LONG STINTS: DID THEY PAY OFF?",
                   f"{args.year} season · position at the finish vs start of the long stint",
