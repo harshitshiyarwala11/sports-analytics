@@ -98,6 +98,74 @@ def summary(st, compound=None):
     return out.sort_values(["exceeded", "exceeded_pct", "avg_laps_vs_median"], ascending=False)
 
 
+# Pirelli's sidewall colours, so the compound reads at a glance.
+COMPOUND_COLOURS = {"SOFT": "#E53935", "MEDIUM": "#F2C230", "HARD": "#E8E8E8"}
+
+
+def by_compound(st):
+    """Per driver: stints past the window, split by compound, plus totals."""
+    total = summary(st)
+    table = pd.DataFrame(index=total.index)
+    table["team"] = total.team
+    for comp in DRY:
+        s = st[st.compound == comp].groupby("driver")
+        table[f"{comp.title()} exceeded"] = s.exceeded.sum()
+        table[f"{comp.title()} stints"] = s.size()
+    table = table.fillna(0)
+    table["Total exceeded"] = total.exceeded
+    table["Total stints"] = total.stints
+    table["Exceeded %"] = total.exceeded_pct
+    table["Avg laps vs median"] = total.avg_laps_vs_median
+    return table.sort_values(["Total exceeded", "Exceeded %"], ascending=False)
+
+
+def draw_all(path, title, subtitle, table, highlight, notes, top_n=15):
+    """Stacked bars: stints past the window per driver, by compound."""
+    t = table.head(top_n).iloc[::-1]
+    fig = plt.figure(figsize=(10.8, 13.5), dpi=100)
+    fig.patch.set_facecolor(BG)
+    fig.text(0.5, 0.955, title, ha="center", fontsize=36, color=INK, fontweight="bold")
+    fig.text(0.5, 0.922, subtitle, ha="center", fontsize=19, color=INK_2)
+    ax = fig.add_axes([0.14, 0.30, 0.60, 0.57])
+    ax.set_facecolor(BG)
+    left = np.zeros(len(t))
+    for comp in DRY:
+        vals = t[f"{comp.title()} exceeded"].to_numpy()
+        ax.barh(t.index, vals, left=left, color=COMPOUND_COLOURS[comp], height=0.62,
+                edgecolor=BG, linewidth=2, label=comp.title())
+        for i, (v, l) in enumerate(zip(vals, left)):
+            if v:
+                ax.text(l + v / 2, i, f"{int(v)}", ha="center", va="center", fontsize=13,
+                        color="#0B1426", fontweight="bold")
+        left += vals
+    for i, (d, r) in enumerate(t.iterrows()):
+        ax.text(r["Total exceeded"] + 0.2, i,
+                f"{int(r['Total exceeded'])} of {int(r['Total stints'])}  "
+                f"({r['Exceeded %']:.0f}%)", va="center", fontsize=14,
+                color=INK if d == highlight else INK_2,
+                fontweight="bold" if d == highlight else "normal")
+    ax.set_xlim(0, t["Total exceeded"].max() * 1.55 + 0.5)
+    ax.tick_params(axis="y", colors=INK, labelsize=16, length=0, pad=10)
+    for lab in ax.get_yticklabels():
+        if lab.get_text() == highlight:
+            lab.set_fontweight("bold")
+            lab.set_color(DRIVER_COLOURS.get(highlight, INK))
+    ax.tick_params(axis="x", colors=MUTED, labelsize=13)
+    ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))
+    ax.grid(axis="x", color=GRIDLINE, lw=0.8)
+    ax.set_axisbelow(True)
+    for sp in ax.spines.values():
+        sp.set_visible(False)
+    ax.set_xlabel("completed stints that ran past the field's pit window", color=MUTED,
+                  fontsize=14)
+    ax.legend(loc="lower right", frameon=False, fontsize=14, labelcolor=INK, ncol=3,
+              bbox_to_anchor=(1.3, -0.16))
+    for i, n in enumerate(notes):
+        fig.text(0.07, 0.19 - 0.026 * i, n, fontsize=13.5, color=MUTED)
+    fig.savefig(path, facecolor=BG)
+    plt.close(fig)
+
+
 def draw(path, title, subtitle, table, highlight, notes, top_n=12):
     t = table[table.stints >= 3].head(top_n).iloc[::-1]
     fig = plt.figure(figsize=(10.8, 13.5), dpi=100)
@@ -156,6 +224,7 @@ def main():
     with pd.ExcelWriter(out / f"{stem}.xlsx") as xl:
         soft.round(2).to_excel(xl, sheet_name="Soft by driver")
         summary(st).round(2).to_excel(xl, sheet_name="All dry by driver")
+        by_compound(st).round(2).to_excel(xl, sheet_name="By driver and compound")
         st.sort_values(["date", "driver", "lap_start"])[["driver", "team"] + cols].round(1) \
             .to_excel(xl, sheet_name="Every stint", index=False)
     notes = [f"{len(sessions)} races of {args.year}. Window = middle half of the field's tyre life "
@@ -169,6 +238,12 @@ def main():
     draw(path, "LONG STINTS ON SOFTS", f"{args.year} season · who runs past the pit window",
          soft, who, notes)
     print("\nSaved", path)
+    path = out / f"{stem}_all_tyres.png"
+    draw_all(path, "LONG STINTS · ALL TYRES",
+             f"{args.year} season · who runs past the pit window", by_compound(st), who, notes)
+    print("Saved", path)
+    print("\nBy driver and compound:")
+    print(by_compound(st).head(15).round(1).to_string())
 
 
 if __name__ == "__main__":
