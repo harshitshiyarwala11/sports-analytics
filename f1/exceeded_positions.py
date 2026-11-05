@@ -9,6 +9,8 @@ the finishing position. Places gained are Excel formulas over those columns.
 
 import argparse
 
+import matplotlib
+import numpy as np
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -16,6 +18,10 @@ from openpyxl.utils import get_column_letter
 
 import pit_windows as pw
 from practice_race_pace import HERE, fetch
+from track_dominance import BG, DRIVER_COLOURS, INK, INK_2, MUTED
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
 
 FONT = "Arial"
 HEADER_FILL = PatternFill("solid", start_color="1C5CAB")
@@ -156,9 +162,78 @@ def write_workbook(path, df, year, n_races):
     wb.save(path)
 
 
+OUTCOMES = [("Gained", "#3DAF2C"), ("Same", "#8A97AD"), ("Lost", "#E53935"),
+            ("Did not finish", "#3A4660")]
+GRIDLINE = "#2A3854"
+plt.rcParams["font.family"] = "Liberation Sans"
+
+
+def outcomes(df):
+    """Per driver: long stints by result at the finish vs position at the stint start."""
+    fin = pd.to_numeric(df.finish, errors="coerce")
+    change = df.pos_stint_start - fin
+    df = df.assign(outcome=np.select([fin.isna(), change > 0, change == 0],
+                                     ["Did not finish", "Gained", "Same"], "Lost"),
+                   change=change)
+    t = df.pivot_table(index="driver", columns="outcome", values="race", aggfunc="count",
+                       fill_value=0)
+    for name, _ in OUTCOMES:
+        if name not in t:
+            t[name] = 0
+    t["Total"] = t[[n for n, _ in OUTCOMES]].sum(axis=1)
+    t["Avg change"] = df.groupby("driver").change.mean()
+    return t.sort_values(["Total", "Gained"], ascending=False)
+
+
+def draw_outcomes(path, title, subtitle, t, highlight, notes, top_n=15):
+    t = t.head(top_n).iloc[::-1]
+    fig = plt.figure(figsize=(10.8, 13.5), dpi=100)
+    fig.patch.set_facecolor(BG)
+    fig.text(0.5, 0.955, title, ha="center", fontsize=34, color=INK, fontweight="bold")
+    fig.text(0.5, 0.922, subtitle, ha="center", fontsize=19, color=INK_2)
+    ax = fig.add_axes([0.14, 0.30, 0.58, 0.57])
+    ax.set_facecolor(BG)
+    left = np.zeros(len(t))
+    for name, colour in OUTCOMES:
+        vals = t[name].to_numpy()
+        ax.barh(t.index, vals, left=left, color=colour, height=0.62, edgecolor=BG,
+                linewidth=2, label=name)
+        for i, (v, l) in enumerate(zip(vals, left)):
+            if v:
+                ax.text(l + v / 2, i, f"{int(v)}", ha="center", va="center", fontsize=13,
+                        color=INK if name in ("Did not finish", "Lost") else "#0B1426",
+                        fontweight="bold")
+        left += vals
+    for i, (d, r) in enumerate(t.iterrows()):
+        avg = "" if pd.isna(r["Avg change"]) else f"  ·  avg {r['Avg change']:+.1f}"
+        ax.text(r.Total + 0.2, i, f"{int(r.Gained)} of {int(r.Total)} gained{avg}",
+                va="center", fontsize=14, color=INK if d == highlight else INK_2,
+                fontweight="bold" if d == highlight else "normal")
+    ax.set_xlim(0, t.Total.max() * 1.75 + 0.5)
+    ax.tick_params(axis="y", colors=INK, labelsize=16, length=0, pad=10)
+    for lab in ax.get_yticklabels():
+        if lab.get_text() == highlight:
+            lab.set_fontweight("bold")
+            lab.set_color(DRIVER_COLOURS.get(highlight, INK))
+    ax.tick_params(axis="x", colors=MUTED, labelsize=13)
+    ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))
+    ax.grid(axis="x", color=GRIDLINE, lw=0.8)
+    ax.set_axisbelow(True)
+    for sp in ax.spines.values():
+        sp.set_visible(False)
+    ax.set_xlabel("long stints (past the pit window)", color=MUTED, fontsize=14)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.62, -0.09), frameon=False, ncol=4,
+              fontsize=14, labelcolor=INK)
+    for i, n in enumerate(notes):
+        fig.text(0.07, 0.17 - 0.026 * i, n, fontsize=13.5, color=MUTED)
+    fig.savefig(path, facecolor=BG)
+    plt.close(fig)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--year", type=int, required=True)
+    parser.add_argument("--driver", default="ANT", help="driver to highlight")
     args = parser.parse_args()
     sessions = [s for s in fetch("sessions", year=args.year, session_name="Race")
                 if pd.Timestamp(s["date_end"]) < pd.Timestamp.now(tz="UTC")]
@@ -177,6 +252,19 @@ def main():
     path = out / f"{args.year}_exceeded_stints_positions.xlsx"
     write_workbook(path, df, args.year, len(sessions))
     print(f"{len(df)} exceeded stints -> {path}")
+    t = outcomes(df)
+    notes = [f"{len(df)} stints that ran past the pit window, {args.year} season "
+             f"({len(sessions)} races).",
+             "Gained / same / lost = finishing position vs position at the start of the "
+             "long stint.",
+             "Avg = average places gained (finishers only). Data: OpenF1 positions & "
+             "results."]
+    png = out / f"{args.year}_long_stints_finish.png"
+    draw_outcomes(png, "LONG STINTS: DID THEY PAY OFF?",
+                  f"{args.year} season · position at the finish vs start of the long stint",
+                  t, args.driver.upper(), notes)
+    print("Saved", png)
+    print(t.round(2).to_string())
     return df
 
 
